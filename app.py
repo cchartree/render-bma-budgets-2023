@@ -1,17 +1,12 @@
+
+
+import streamlit as st
+import plost
+import PyPDF2 as ppdf
 import pandas as pd
 import numpy as np
-import plotly.express as px
-import plotly.graph_objects as go
-import dash
-import dash_daq as daq
-import dash_core_components as dcc
-import dash_html_components as html
-from dash.dependencies import Input, Output
-import PyPDF2 as ppdf
+import altair as alt
 
-
-app = dash.Dash(__name__)
-server = app.server
 
 src = pd.DataFrame()
 p01 = []
@@ -221,103 +216,55 @@ disp = p06
 
 
 
-# -------------------------------------------------------------
-
-app.layout = html.Div([
-
-    html.H1('BMA Budget Allocations for Fiscal Year 2023', style={'text-align': 'center'}),
-
-    dcc.Dropdown(
-        id='w_keywords',
-        options=list_topics2,
-        multi=True,
-        value='All Categories',
-        style={'width': '50%'}
-    ),
+# ------------------------------------------------------------------------------
 
 
-    dcc.Slider(
-        id='w_topranks',
-        value=20,
-        min=5,
-        max=200,
-        step=1,
-        marks=None,
-        tooltip={"placement": "bottom", "always_visible": True}
-    ),
 
-    dcc.Slider(
-        id='w_minbudgets',
-        value=0,
-        min=0,
-        max=5000,
-        step=100,
-        marks=None,
-        tooltip={"placement": "bottom", "always_visible": True}
-    ),
+st.set_page_config(layout='wide', initial_sidebar_state='expanded')
 
-    dcc.Slider(
-        id='w_maxbudgets',
-        value=20000,
-        min=0,
-        max=20000,
-        step=100,
-        marks=None,
-        tooltip={"placement": "bottom", "always_visible": True}
-    ),
+st.sidebar.header('Apply filters here to see only what you would like to see')
 
-    dcc.Textarea(
-        id='w_textsearch',
-        value=' ',
-        style={'width': '50%'},
-    ),
-
-    html.Div(id='output_container', children=[]),
-
-    html.Br(),
-
-    dcc.Graph(id='BudgetHBar', figure={})
-
-])
+w_keywords = st.sidebar.multiselect('Categories by keywords (choose all that apply):',
+                                    list_topics2, ['All Categories'])
+w_minbudgets = st.sidebar.slider('Minimum Budget (THB millions):', min_value=0, max_value=5000,
+                                 value=0, step=100)
+w_maxbudgets = st.sidebar.slider('Maximum Budget (THB millions):', min_value=1000, max_value=20000,
+                                 value=20000, step=100)
+w_topranks = st.sidebar.slider('Topranks:', min_value=5, max_value=200,
+                               value=20, step=1)
+w_textsearch = st.sidebar.text_area('Category (in Thai) contains:', ' ')
 
 
-# -------------------------------------------------------------
 
 numcol = 'Budgets Mn'
 
-@app.callback(
-    [Output(component_id='output_container', component_property='children'),
-     Output(component_id='BudgetHBar', component_property='figure')],
-    [Input(component_id='w_keywords', component_property='value'),
-     Input(component_id='w_topranks', component_property='value'),
-     Input(component_id='w_minbudgets', component_property='value'),
-     Input(component_id='w_maxbudgets', component_property='value'),
-     Input(component_id='w_textsearch', component_property='value')
-     ]
-)
-
-# def update_graph(w_kw,w_top,w_min,w_max,w_text):
-def update_graph(w_kw,w_top,w_min,w_max,w_text):
-
-    chains = '|'.join(w_kw)
-
-    container = ' '
-
+st.markdown('### BMA Budget Allocations for Fiscal Year 2023')
+col1 = st.columns(1)
+with col1:
+    chains = '|'.join(w_keywords)
     dfplot = disp[
         (disp['Chained Tags'].str.contains(chains))
-        & (disp['h1desc'].str.contains(w_text))
+        & (disp['h1desc'].str.contains(w_textsearch))
         ]
+
     dfplot2 = dfplot[['h1desc', numcol]].groupby(['h1desc'], as_index=False)[numcol].agg('sum')
-    dfplot2 = dfplot2.sort_values(by=[numcol]).tail(w_top)
+    dfplot2 = dfplot2.sort_values(by=[numcol]).tail(w_topranks)
     dfplot2 = dfplot2[
-        (dfplot2[numcol] >= w_min)
-        & (dfplot2[numcol] <= w_max)
+        (dfplot2[numcol] >= w_minbudgets)
+        & (dfplot2[numcol] <= w_maxbudgets)
         ]
 
-    fig = px.bar(data_frame=dfplot2, y='h1desc', x=numcol, orientation='h', width=1400, height=450)
+    chart = (
+            alt.Chart(dfplot2)
+            .mark_bar()
+            .encode(
+                x=alt.X("value", type=numcol, title=""),
+                y=alt.Y("index", type="h1desc", title=""),
+                #color=alt.Color("variable", type="nominal", title=""),
+                order=alt.Order("variable", sort="descending"),
+                )
+            )
+    st.altair_chart(chart, use_container_width=True)
 
-    return container, fig
 
 
-if __name__ == '__main__':
-    app.run_server(debug=True)
