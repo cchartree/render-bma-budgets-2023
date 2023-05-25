@@ -1,7 +1,7 @@
 
 
 import streamlit as st
-import plost
+#import plost
 import PyPDF2 as ppdf
 import pandas as pd
 import numpy as np
